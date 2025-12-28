@@ -1,0 +1,51 @@
+name: Daily QT Bot
+
+on:
+  schedule:
+    # Runs at 14:00 UTC (6:00 AM PST)
+    # You can change this using https://crontab.guru/
+    - cron: '0 14 * * *'
+  
+  # Allows you to run this manually from the Actions tab for testing
+  workflow_dispatch:
+
+jobs:
+  send_daily_qt:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Check out the repository code
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2. Set up Python
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      # 3. Install dependencies
+      - name: Install libraries
+        run: |
+          pip install gspread oauth2client requests beautifulsoup4
+
+      # 4. Decode the Google Cloud Key
+      # We take the Base64 secret and decode it into a physical file
+      - name: Create Service Account JSON
+        env:
+          GCP_CREDS: ${{ secrets.GCP_CREDS }}
+        run: |
+          echo "$GCP_CREDS" | base64 -d > src/service_account.json
+
+      # 5. Run the Script
+      - name: Run Daily QT Script
+        env:
+          # If you hardcoded the URL in the script, remove this env var.
+          # If you updated the script to use os.getenv('DISCORD_WEBHOOK_URL'), keep this.
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: python daily_qt.py
+
+      # 6. Cleanup (Optional but good practice)
+      - name: Remove Service Account JSON
+        if: always() # Runs even if the script fails
+        run: rm src/service_account.json
