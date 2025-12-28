@@ -93,6 +93,7 @@ def post_to_discord(reference, eng_text, kor_text):
 
     payload = {
         "username": "Daily QT Bot",
+        "thread_name": f"Daily Bread: {reference}",  # Required for forum channels
         "embeds": [{
             "title": f"🌿 Daily Bread: {reference}",
             "color": 3066993, # Teal
