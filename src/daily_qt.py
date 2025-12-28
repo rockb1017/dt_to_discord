@@ -4,6 +4,7 @@ import requests
 from datetime import datetime
 import re
 import os
+from urllib.parse import quote
 
 # --- CONFIGURATION ---
 DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
@@ -45,11 +46,25 @@ def fetch_english_text(reference):
 def fetch_korean_text(reference):
     # Uses KRV (Korean Revised Version) via API
     try:
-        response = requests.get(f"{BIBLE_API_URL}{reference}?translation=rkrv")
+        # Try KRV translation code
+        response = requests.get(f"{BIBLE_API_URL}{reference}?translation=krv")
+        print(f"Korean API URL: {response.url}")
+        print(f"Korean API status: {response.status_code}")
+        
         if response.status_code == 200:
-            return response.json()['text']
+            data = response.json()
+            print(f"Korean API response keys: {data.keys()}")
+            if 'text' in data:
+                return data['text']
+            else:
+                print(f"Korean API response: {data}")
+                return "Error: No text in response"
+        else:
+            print(f"Korean API error response: {response.text}")
     except Exception as e:
         print(f"Korean API Error: {e}")
+        import traceback
+        traceback.print_exc()
     return "Error fetching Korean text."
 
 
@@ -73,8 +88,8 @@ def post_to_discord(reference, eng_text, kor_text):
         kor_text = kor_text[:950] + "..."
 
     # Create Links
-    esv_link = f"https://www.biblegateway.com/passage/?search={reference}&version=ESV"
-    rnksv_link = f"https://www.biblegateway.com/passage/?search={reference}&version=RNKSV"
+    esv_link = f"https://www.biblegateway.com/passage/?search={quote(reference)}&version=ESV"
+    rnksv_link = f"https://www.biblegateway.com/passage/?search={quote(reference)}&version=RNKSV"
 
     payload = {
         "username": "Daily QT Bot",
@@ -83,13 +98,13 @@ def post_to_discord(reference, eng_text, kor_text):
             "color": 3066993, # Teal
             "fields": [
                 {
-                    "name": "📖 Read in ESV",
-                    "value": f"[Click here to read in ESV]({esv_link})",
+                    "name": "Click here to read in ESV",
+                    "value": f"[Link]({esv_link})",
                     "inline": False
                 },
                 {
-                    "name": "📖 새번역으로 읽기",
-                    "value": f"[새번역 보기]({rnksv_link})",
+                    "name": "Click here to read in RNKSV",
+                    "value": f"[Link]({rnksv_link})",
                     "inline": False
                 },
                 {
