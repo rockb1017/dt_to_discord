@@ -89,7 +89,7 @@ def post_to_discord(reference, eng_text, kor_text):
 
     # Create Links
     esv_link = f"https://www.biblegateway.com/passage/?search={quote(reference)}&version=ESV"
-    rnksv_link = f"https://www.biblegateway.com/passage/?search={quote(reference)}&version=RNKSV"
+    koerv_link = f"https://www.biblegateway.com/passage/?search={quote(reference)}&version=KOERV"
 
     payload = {
         "username": "Daily QT Bot",
@@ -98,25 +98,25 @@ def post_to_discord(reference, eng_text, kor_text):
             "color": 3066993, # Teal
             "fields": [
                 {
-                    "name": "Click here to read in ESV",
+                    "name": "🇺🇸 Click here to read in ESV",
                     "value": f"[Link]({esv_link})",
                     "inline": False
                 },
                 {
-                    "name": "Click here to read in RNKSV",
-                    "value": f"[Link]({rnksv_link})",
+                    "name": "🇰🇷 쉬운성경 (KOERV) 보기",
+                    "value": f"[Link]({koerv_link})",
                     "inline": False
                 },
                 {
-                    "name": "🇺🇸 English (WEB)",
+                    "name": "English (WEB)",
                     "value": eng_text,
                     "inline": False
-                },
-                {
-                    "name": "🇰🇷 Korean (KRV)",
-                    "value": kor_text,
-                    "inline": False
                 }
+                # {
+                #     "name": " Korean (KRV)",
+                #     "value": kor_text,
+                #     "inline": False
+                # }
             ],
             "footer": {
                 "text": f"Posted on {datetime.now().strftime('%B %d, %Y')}"
@@ -140,9 +140,9 @@ def main():
     if ref:
         print(f"Found reference: {ref}")
         eng_text = fetch_english_text(ref)
-        kor_text = fetch_korean_text(ref)
+        # kor_text = fetch_korean_text(ref)
         
-        post_to_discord(ref, eng_text, kor_text)
+        post_to_discord(ref, eng_text, "KRV text placeholder")
     else:
         print("No reading scheduled for today.")
 
