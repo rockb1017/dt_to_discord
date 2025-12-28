@@ -10,7 +10,7 @@ import os
 DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
 if not DISCORD_WEBHOOK_URL:
     raise ValueError("Error: DISCORD_WEBHOOK_URL environment variable is missing.")
-    
+
 SHEET_NAME = "2026_Devotional_Time_Plan"
 BIBLE_API_URL = "https://bible-api.com/" 
 
@@ -127,8 +127,13 @@ def post_to_discord(reference, eng_text, kor_text):
         }]
     }
 
-    requests.post(DISCORD_WEBHOOK_URL, json=payload)
-    print(f"Posted {reference} to Discord.")
+    response = requests.post(DISCORD_WEBHOOK_URL, json=payload)
+    
+    if response.status_code in [200, 204]:
+        print(f"✅ Successfully posted {reference} to Discord.")
+    else:
+        print(f"❌ Discord webhook failed with status {response.status_code}")
+        print(f"Response: {response.text}")
 
 # --- MAIN ---
 def main():
