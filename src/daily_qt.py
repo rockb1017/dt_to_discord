@@ -63,71 +63,47 @@ def fetch_korean_rnksv(reference):
             
         soup = BeautifulSoup(response.content, 'html.parser')
         
-        # Debug: Save the HTML to see what we're getting
-        print(f"HTML length: {len(response.content)}")
+        # Find all span elements with class 'text'
+        text_spans = soup.find_all('span', class_='text')
+        print(f"Found {len(text_spans)} span.text elements")
         
-        # Try to find the passage with more selectors
-        passage_content = None
-        
-        # Method 1: Look for passages class
-        passage_content = soup.find('div', class_='passages')
-        
-        # Method 2: Look for passage-display-bcv
-        if not passage_content:
-            passage_content = soup.find('div', class_='passage-display-bcv')
+        if text_spans:
+            full_text = []
+            for span in text_spans:
+                text = span.get_text(strip=True)
+                if text and len(text) > 2:  # Skip verse numbers
+                    # Clean up: Remove cross-reference letters
+                    text = re.sub(r'\[[a-zA-Z]\]', '', text)
+                    # Remove footnote markers
+                    text = re.sub(r'\s*\[\d+\]\s*', ' ', text)
+                    full_text.append(text.strip())
             
-        # Method 3: Look for bcv (Bible Chapter Verse)
-        if not passage_content:
-            passage_content = soup.find('div', class_='bcv')
+            result = ' '.join(full_text)
+            print(f"Extracted Korean text length: {len(result)}")
+            return result if len(result) > 50 else "Error: Not enough text extracted."
         
-        # Method 4: Look for any div with data-passage attribute
-        if not passage_content:
-            passage_content = soup.find('div', attrs={'data-passage': True})
+        # Try alternative: look for 'verse' class
+        verses = soup.find_all(class_=re.compile(r'.*verse.*', re.I))
+        print(f"Found {len(verses)} elements with 'verse' in class")
+        
+        if verses:
+            full_text = []
+            for verse in verses:
+                text = verse.get_text(strip=True)
+                if text and len(text) > 5:
+                    text = re.sub(r'\[[a-zA-Z0-9]\]', '', text)
+                    full_text.append(text)
             
-        # Method 5: Just get everything with class containing 'passage' and 'text'
-        if not passage_content:
-            all_divs = soup.find_all('div')
-            for div in all_divs:
-                classes = div.get('class', [])
-                class_str = ' '.join(classes).lower()
-                if 'passage' in class_str or 'text' in class_str:
-                    # Check if it has substantial text
-                    if len(div.get_text(strip=True)) > 100:
-                        passage_content = div
-                        print(f"Found passage using method 5: {classes}")
-                        break
+            result = ' '.join(full_text)
+            print(f"Extracted from verses: {len(result)} chars")
+            return result if len(result) > 50 else "Error: Not enough text extracted."
         
-        if not passage_content:
-            # Last resort: look for all <p> tags in the main content
-            print("Trying to extract all paragraph text...")
-            all_paragraphs = soup.find_all('p', class_=lambda x: x and 'text' in str(x).lower())
-            if all_paragraphs:
-                text = '\n\n'.join([p.get_text(strip=True) for p in all_paragraphs])
-                return text if len(text) > 50 else "Error: Could not find passage text."
-            return "Error: Could not find passage text (Check reference format)."
-
-        # Extract text clearly
-        full_text = []
+        # Last resort: dump a snippet of HTML for debugging
+        print("=== HTML SNIPPET (first 2000 chars) ===")
+        print(str(soup)[:2000])
+        print("=== END SNIPPET ===")
         
-        # Find all paragraphs or spans with text
-        for element in passage_content.find_all(['p', 'span']):
-            text = element.get_text() 
-            if text.strip():
-                # Clean up: Remove cross-reference letters often formatted like [a]
-                text = re.sub(r'\[[a-zA-Z]\]', '', text) 
-                full_text.append(text.strip())
-        
-        # Remove duplicates while preserving order
-        seen = set()
-        unique_text = []
-        for text in full_text:
-            if text not in seen and len(text) > 3:  # Skip very short fragments
-                seen.add(text)
-                unique_text.append(text)
-            
-        result = "\n\n".join(unique_text)
-        print(f"Extracted Korean text length: {len(result)}")
-        return result if result else "Error: No text extracted from passage."
+        return "Error: Could not find passage text (Check reference format)."
 
     except Exception as e:
         print(f"Korean Scrape Error: {e}")
