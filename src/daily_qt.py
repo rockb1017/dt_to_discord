@@ -31,7 +31,7 @@ def get_todays_reference():
             return row['Reference']
     return None
 
-# --- ENGLISH TEXT (API) ---
+# --- ENGLISH TEXT (API - WEB) ---
 def fetch_english_text(reference):
     # Uses WEB (World English Bible) via API
     try:
@@ -42,82 +42,24 @@ def fetch_english_text(reference):
         print(f"English API Error: {e}")
     return "Error fetching English text."
 
-# --- KOREAN TEXT (SCRAPER - RNKSV) ---
-def fetch_korean_rnksv(reference):
-    # Scrapes '새번역' from BibleGateway
-    url = "https://www.biblegateway.com/passage/"
-    params = {
-        "search": reference,
-        "version": "RNKSV" # This is the code for 새번역
-    }
-    
-    headers = {'User-Agent': 'Mozilla/5.0'} # Pretend to be a browser
-    
+# --- KOREAN TEXT (API - KRV) ---
+def fetch_korean_text(reference):
+    # Uses KRV (Korean Revised Version) via API
     try:
-        response = requests.get(url, params=params, headers=headers)
-        print(f"Korean URL: {response.url}")
-        print(f"Korean response status: {response.status_code}")
-        
-        if response.status_code != 200:
-            return "Error connecting to BibleGateway."
-            
-        soup = BeautifulSoup(response.content, 'html.parser')
-        
-        # Find all span elements with class 'text'
-        text_spans = soup.find_all('span', class_='text')
-        print(f"Found {len(text_spans)} span.text elements")
-        
-        if text_spans:
-            full_text = []
-            for span in text_spans:
-                text = span.get_text(strip=True)
-                if text and len(text) > 2:  # Skip verse numbers
-                    # Clean up: Remove cross-reference letters
-                    text = re.sub(r'\[[a-zA-Z]\]', '', text)
-                    # Remove footnote markers
-                    text = re.sub(r'\s*\[\d+\]\s*', ' ', text)
-                    full_text.append(text.strip())
-            
-            result = ' '.join(full_text)
-            print(f"Extracted Korean text length: {len(result)}")
-            return result if len(result) > 50 else "Error: Not enough text extracted."
-        
-        # Try alternative: look for 'verse' class
-        verses = soup.find_all(class_=re.compile(r'.*verse.*', re.I))
-        print(f"Found {len(verses)} elements with 'verse' in class")
-        
-        if verses:
-            full_text = []
-            for verse in verses:
-                text = verse.get_text(strip=True)
-                if text and len(text) > 5:
-                    text = re.sub(r'\[[a-zA-Z0-9]\]', '', text)
-                    full_text.append(text)
-            
-            result = ' '.join(full_text)
-            print(f"Extracted from verses: {len(result)} chars")
-            return result if len(result) > 50 else "Error: Not enough text extracted."
-        
-        # Last resort: dump a snippet of HTML for debugging
-        print("=== HTML SNIPPET (first 2000 chars) ===")
-        print(str(soup)[:2000])
-        print("=== END SNIPPET ===")
-        
-        return "Error: Could not find passage text (Check reference format)."
-
+        response = requests.get(f"{BIBLE_API_URL}{reference}?translation=rkrv")
+        if response.status_code == 200:
+            return response.json()['text']
     except Exception as e:
-        print(f"Korean Scrape Error: {e}")
-        import traceback
-        traceback.print_exc()
-        return "Error fetching Korean text."
+        print(f"Korean API Error: {e}")
+    return "Error fetching Korean text."
+
+
 
 # --- DISCORD POSTING ---
 def post_to_discord(reference, eng_text, kor_text):
     # Debug: Print what we got
     print(f"English text length: {len(eng_text)}")
     print(f"Korean text length: {len(kor_text)}")
-    print(f"English text preview: {eng_text[:100]}...")
-    print(f"Korean text preview: {kor_text[:100]}...")
     
     # Ensure we have valid text (Discord doesn't allow empty field values)
     if not eng_text or eng_text.strip() == "":
@@ -126,21 +68,19 @@ def post_to_discord(reference, eng_text, kor_text):
         kor_text = "Error: No Korean text available"
     
     # Truncate if too long (Discord limit is 1024 chars per field)
-    # For code blocks, we need room for the ``` markers (6 chars)
     if len(eng_text) > 1000: 
-        eng_text = eng_text[:950] + "... (See Link)"
-    if len(kor_text) > 994:  # Leave room for ``` markers
-        kor_text = kor_text[:944] + "... (See Link)"
+        eng_text = eng_text[:950] + "..."
+    if len(kor_text) > 1000:
+        kor_text = kor_text[:950] + "..."
 
-    # Create Links for the title
-    eng_link = f"https://www.biblegateway.com/passage/?search={reference}&version=NIV"
-    kor_link = f"https://www.biblegateway.com/passage/?search={reference}&version=RNKSV"
+    # Create Links
+    esv_link = f"https://www.biblegateway.com/passage/?search={reference}&version=ESV"
+    rnksv_link = f"https://www.biblegateway.com/passage/?search={reference}&version=RNKSV"
 
     payload = {
         "username": "Daily QT Bot",
         "embeds": [{
             "title": f"🌿 Daily Bread: {reference}",
-            "url": kor_link, # Clicking title goes to Korean version
             "color": 3066993, # Teal
             "fields": [
                 {
@@ -149,8 +89,18 @@ def post_to_discord(reference, eng_text, kor_text):
                     "inline": False
                 },
                 {
-                    "name": "🇰🇷 Korean (새번역)",
-                    "value": kor_text,  # Remove code block formatting for now
+                    "name": "📖 Read in ESV",
+                    "value": f"[Click here to read in ESV]({esv_link})",
+                    "inline": False
+                },
+                {
+                    "name": "🇰🇷 Korean (KRV)",
+                    "value": kor_text,
+                    "inline": False
+                },
+                {
+                    "name": "📖 새번역으로 읽기",
+                    "value": f"[새번역 보기]({rnksv_link})",
                     "inline": False
                 }
             ],
@@ -176,7 +126,7 @@ def main():
     if ref:
         print(f"Found reference: {ref}")
         eng_text = fetch_english_text(ref)
-        kor_text = fetch_korean_rnksv(ref) # Now using the Scraper
+        kor_text = fetch_korean_text(ref)
         
         post_to_discord(ref, eng_text, kor_text)
     else:
