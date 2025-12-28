@@ -4,6 +4,7 @@ import requests
 from bs4 import BeautifulSoup # New library for scraping
 from datetime import datetime
 import re
+import os
 
 # --- CONFIGURATION ---
 DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
