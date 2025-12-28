@@ -83,7 +83,7 @@ def post_to_discord(reference, eng_text, kor_text):
     
     # Truncate if too long (Discord limit is 1024 chars per field)
     if len(eng_text) > 1000: 
-        eng_text = eng_text[:950] + "..."
+        eng_text = eng_text[:950] + "... [Click link above to read full text]"
     if len(kor_text) > 1000:
         kor_text = kor_text[:950] + "..."
 
