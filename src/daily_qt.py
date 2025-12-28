@@ -8,6 +8,9 @@ import os
 
 # --- CONFIGURATION ---
 DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
+if not DISCORD_WEBHOOK_URL:
+    raise ValueError("Error: DISCORD_WEBHOOK_URL environment variable is missing.")
+    
 SHEET_NAME = "2026_Devotional_Time_Plan"
 BIBLE_API_URL = "https://bible-api.com/" 
 
