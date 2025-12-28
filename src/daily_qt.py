@@ -1,7 +1,6 @@
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import requests
-from bs4 import BeautifulSoup # New library for scraping
 from datetime import datetime
 import re
 import os
@@ -84,23 +83,23 @@ def post_to_discord(reference, eng_text, kor_text):
             "color": 3066993, # Teal
             "fields": [
                 {
-                    "name": "🇺🇸 English (WEB)",
-                    "value": eng_text,
-                    "inline": False
-                },
-                {
                     "name": "📖 Read in ESV",
                     "value": f"[Click here to read in ESV]({esv_link})",
                     "inline": False
                 },
                 {
-                    "name": "🇰🇷 Korean (KRV)",
-                    "value": kor_text,
+                    "name": "📖 새번역으로 읽기",
+                    "value": f"[새번역 보기]({rnksv_link})",
                     "inline": False
                 },
                 {
-                    "name": "📖 새번역으로 읽기",
-                    "value": f"[새번역 보기]({rnksv_link})",
+                    "name": "🇺🇸 English (WEB)",
+                    "value": eng_text,
+                    "inline": False
+                },
+                {
+                    "name": "🇰🇷 Korean (KRV)",
+                    "value": kor_text,
                     "inline": False
                 }
             ],
