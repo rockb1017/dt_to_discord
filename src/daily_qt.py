@@ -66,39 +66,66 @@ def fetch_korean_rnksv(reference):
         # Debug: Save the HTML to see what we're getting
         print(f"HTML length: {len(response.content)}")
         
-        # Try multiple possible selectors
-        passage_content = soup.find('div', class_='passage-text')
+        # Try to find the passage with more selectors
+        passage_content = None
+        
+        # Method 1: Look for passages class
+        passage_content = soup.find('div', class_='passages')
+        
+        # Method 2: Look for passage-display-bcv
         if not passage_content:
-            # Try alternative selector
-            passage_content = soup.find('div', class_='passage-content')
+            passage_content = soup.find('div', class_='passage-display-bcv')
+            
+        # Method 3: Look for bcv (Bible Chapter Verse)
         if not passage_content:
-            # Try another common one
-            passage_content = soup.find('div', class_='result-text-style-normal')
+            passage_content = soup.find('div', class_='bcv')
+        
+        # Method 4: Look for any div with data-passage attribute
+        if not passage_content:
+            passage_content = soup.find('div', attrs={'data-passage': True})
+            
+        # Method 5: Just get everything with class containing 'passage' and 'text'
+        if not passage_content:
+            all_divs = soup.find_all('div')
+            for div in all_divs:
+                classes = div.get('class', [])
+                class_str = ' '.join(classes).lower()
+                if 'passage' in class_str or 'text' in class_str:
+                    # Check if it has substantial text
+                    if len(div.get_text(strip=True)) > 100:
+                        passage_content = div
+                        print(f"Found passage using method 5: {classes}")
+                        break
         
         if not passage_content:
-            print("Could not find passage div. Looking for any passage-related divs...")
-            # Debug: print all div classes to help us find the right one
-            all_divs = soup.find_all('div', class_=True)
-            passage_divs = [d.get('class') for d in all_divs if any('passage' in str(c).lower() for c in d.get('class', []))]
-            print(f"Found divs with 'passage' in class: {passage_divs[:5]}")
+            # Last resort: look for all <p> tags in the main content
+            print("Trying to extract all paragraph text...")
+            all_paragraphs = soup.find_all('p', class_=lambda x: x and 'text' in str(x).lower())
+            if all_paragraphs:
+                text = '\n\n'.join([p.get_text(strip=True) for p in all_paragraphs])
+                return text if len(text) > 50 else "Error: Could not find passage text."
             return "Error: Could not find passage text (Check reference format)."
 
         # Extract text clearly
         full_text = []
         
-        # Find all verse paragraphs
-        paragraphs = passage_content.find_all('p')
+        # Find all paragraphs or spans with text
+        for element in passage_content.find_all(['p', 'span']):
+            text = element.get_text() 
+            if text.strip():
+                # Clean up: Remove cross-reference letters often formatted like [a]
+                text = re.sub(r'\[[a-zA-Z]\]', '', text) 
+                full_text.append(text.strip())
         
-        for p in paragraphs:
-            text = p.get_text() 
+        # Remove duplicates while preserving order
+        seen = set()
+        unique_text = []
+        for text in full_text:
+            if text not in seen and len(text) > 3:  # Skip very short fragments
+                seen.add(text)
+                unique_text.append(text)
             
-            # Clean up: Remove cross-reference letters often formatted like [a]
-            text = re.sub(r'\[[a-zA-Z]\]', '', text) 
-            
-            # Clean up: Remove extra verse numbers that stick to words
-            full_text.append(text.strip())
-            
-        result = "\n\n".join(full_text)
+        result = "\n\n".join(unique_text)
         print(f"Extracted Korean text length: {len(result)}")
         return result if result else "Error: No text extracted from passage."
 
