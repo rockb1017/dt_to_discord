@@ -14,7 +14,7 @@ BIBLE_API_URL = "https://bible-api.com/"
 # --- GOOGLE SHEETS ---
 def get_todays_reference():
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-    creds = ServiceAccountCredentials.from_json_keyfile_name("service_account.json", scope)
+    creds = ServiceAccountCredentials.from_json_keyfile_name("src/service_account.json", scope)
     client = gspread.authorize(creds)
     
     sheet = client.open(SHEET_NAME).sheet1
