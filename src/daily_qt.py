@@ -95,9 +95,24 @@ def fetch_korean_rnksv(reference):
 
 # --- DISCORD POSTING ---
 def post_to_discord(reference, eng_text, kor_text):
+    # Debug: Print what we got
+    print(f"English text length: {len(eng_text)}")
+    print(f"Korean text length: {len(kor_text)}")
+    print(f"English text preview: {eng_text[:100]}...")
+    print(f"Korean text preview: {kor_text[:100]}...")
+    
+    # Ensure we have valid text (Discord doesn't allow empty field values)
+    if not eng_text or eng_text.strip() == "":
+        eng_text = "Error: No English text available"
+    if not kor_text or kor_text.strip() == "":
+        kor_text = "Error: No Korean text available"
+    
     # Truncate if too long (Discord limit is 1024 chars per field)
-    if len(eng_text) > 1000: eng_text = eng_text[:950] + "... (See Link)"
-    if len(kor_text) > 1000: kor_text = kor_text[:950] + "... (See Link)"
+    # For code blocks, we need room for the ``` markers (6 chars)
+    if len(eng_text) > 1000: 
+        eng_text = eng_text[:950] + "... (See Link)"
+    if len(kor_text) > 994:  # Leave room for ``` markers
+        kor_text = kor_text[:944] + "... (See Link)"
 
     # Create Links for the title
     eng_link = f"https://www.biblegateway.com/passage/?search={reference}&version=NIV"
@@ -117,7 +132,7 @@ def post_to_discord(reference, eng_text, kor_text):
                 },
                 {
                     "name": "🇰🇷 Korean (새번역)",
-                    "value": f"```{kor_text}```", 
+                    "value": kor_text,  # Remove code block formatting for now
                     "inline": False
                 }
             ],
