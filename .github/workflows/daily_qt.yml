@@ -43,7 +43,7 @@ jobs:
           # If you hardcoded the URL in the script, remove this env var.
           # If you updated the script to use os.getenv('DISCORD_WEBHOOK_URL'), keep this.
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-        run: python daily_qt.py
+        run: python src/daily_qt.py
 
       # 6. Cleanup (Optional but good practice)
       - name: Remove Service Account JSON
