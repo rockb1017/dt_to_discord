@@ -55,42 +55,57 @@ def fetch_korean_rnksv(reference):
     
     try:
         response = requests.get(url, params=params, headers=headers)
+        print(f"Korean URL: {response.url}")
+        print(f"Korean response status: {response.status_code}")
+        
         if response.status_code != 200:
             return "Error connecting to BibleGateway."
             
         soup = BeautifulSoup(response.content, 'html.parser')
         
-        # The text is usually inside a div class 'passage-text'
+        # Debug: Save the HTML to see what we're getting
+        print(f"HTML length: {len(response.content)}")
+        
+        # Try multiple possible selectors
         passage_content = soup.find('div', class_='passage-text')
+        if not passage_content:
+            # Try alternative selector
+            passage_content = soup.find('div', class_='passage-content')
+        if not passage_content:
+            # Try another common one
+            passage_content = soup.find('div', class_='result-text-style-normal')
         
         if not passage_content:
+            print("Could not find passage div. Looking for any passage-related divs...")
+            # Debug: print all div classes to help us find the right one
+            all_divs = soup.find_all('div', class_=True)
+            passage_divs = [d.get('class') for d in all_divs if any('passage' in str(c).lower() for c in d.get('class', []))]
+            print(f"Found divs with 'passage' in class: {passage_divs[:5]}")
             return "Error: Could not find passage text (Check reference format)."
 
         # Extract text clearly
-        # BibleGateway puts verse numbers in <sup> tags and footnotes in special classes.
-        # We want to keep it readable.
-        
         full_text = []
         
         # Find all verse paragraphs
         paragraphs = passage_content.find_all('p')
         
         for p in paragraphs:
-            # Get text but remove the little footnote letters if possible
-            # This is a simple extraction; might include small verse numbers
             text = p.get_text() 
             
             # Clean up: Remove cross-reference letters often formatted like [a]
             text = re.sub(r'\[[a-zA-Z]\]', '', text) 
             
             # Clean up: Remove extra verse numbers that stick to words
-            # (BibleGateway formatting can be tricky, this keeps it simple)
             full_text.append(text.strip())
             
-        return "\n\n".join(full_text)
+        result = "\n\n".join(full_text)
+        print(f"Extracted Korean text length: {len(result)}")
+        return result if result else "Error: No text extracted from passage."
 
     except Exception as e:
         print(f"Korean Scrape Error: {e}")
+        import traceback
+        traceback.print_exc()
         return "Error fetching Korean text."
 
 # --- DISCORD POSTING ---
