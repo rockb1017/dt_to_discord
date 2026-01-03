@@ -71,18 +71,21 @@ def fetch_english_text(reference):
         
         if verse_containers:
             for span in verse_containers:
-                # Replace cross-reference links with space before extracting text
-                for crossref in span.find_all('sup', class_='crossreference'):
-                    crossref.replace_with(' ')
+                # Replace all sup tags (crossrefs, footnotes) with space to prevent word concatenation
+                for sup in span.find_all('sup'):
+                    if 'versenum' not in sup.get('class', []):
+                        sup.replace_with(' ')
                 
                 # Find verse number
                 verse_num = span.find('sup', class_='versenum')
                 if verse_num:
                     num = verse_num.get_text(strip=True)
-                    verse_num.decompose()
-                    text = span.get_text(strip=True)
-                    # Clean up footnote markers
-                    text = re.sub(r'\[[a-zA-Z]\]', ' ', text)
+                    verse_num.replace_with(' ')  # Replace with space instead of decompose
+                    
+                    # Get text and clean up
+                    text = span.get_text(separator=' ')  # Use separator=' ' to add space between elements
+                    # Clean up footnote markers and extra spaces
+                    text = re.sub(r'\[[a-zA-Z0-9]\]', ' ', text)
                     text = re.sub(r'\s+', ' ', text)  # Clean up multiple spaces
                     text = text.strip()
                     if text:
