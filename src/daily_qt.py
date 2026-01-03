@@ -83,7 +83,9 @@ def fetch_english_text(reference):
                     text = span.get_text(strip=True)
                     # Clean up footnote markers and cross-reference markers
                     text = re.sub(r'\[[a-zA-Z]\]', '', text)
-                    text = re.sub(r'\([A-Z]\)', '', text)  # Remove (A), (B), (C) etc.
+                    text = re.sub(r'\([A-Z]\)', ' ', text)  # Replace (A), (B), (C) with space
+                    text = re.sub(r'\s+', ' ', text)  # Clean up multiple spaces
+                    text = text.strip()
                     if text:
                         verses_data.append({"num": num, "text": text})
                         print(f"  Verse {num}: {text[:50]}...")
