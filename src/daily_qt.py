@@ -193,10 +193,10 @@ def post_to_discord(reference, eng_text, kor_text):
         kor_text = "Error: No Korean text available"
     
     # Truncate if too long (Discord limit is 2000 chars per field)
-    if len(eng_text) > 2000: 
-        eng_text = eng_text[:1950] + "... [Click link above to read full text]"
-    if len(kor_text) > 2000:
-        kor_text = kor_text[:1950] + "..."
+    if len(eng_text) > 1000: 
+        eng_text = eng_text[:950] + "... [Click link above to read full text]"
+    if len(kor_text) > 1000:
+        kor_text = kor_text[:950] + "..."
 
     # Create Links
     esv_link = f"https://www.biblegateway.com/passage/?search={quote(reference)}&version=ESV"
