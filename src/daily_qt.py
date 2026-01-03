@@ -233,6 +233,10 @@ def post_to_discord(reference, eng_text, kor_text):
     else:
         print(f"❌ Discord webhook failed with status {response.status_code}")
         print(f"Response: {response.text}")
+        # Also print the payload for debugging
+        import json
+        print(f"\n=== PAYLOAD DEBUG ===")
+        print(json.dumps(payload, indent=2, ensure_ascii=False)[:1000])
 
 # --- MAIN ---
 def main():
