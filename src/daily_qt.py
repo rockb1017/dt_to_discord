@@ -42,7 +42,8 @@ def fetch_english_text(reference):
             # Check if verses array exists for verse-by-verse formatting
             if 'verses' in data:
                 verses = data['verses']
-                formatted_text = '\n'.join([f"**{v['verse']}** {v['text']}" for v in verses])
+                # Use single space instead of newlines for Discord compatibility
+                formatted_text = ' '.join([f"**{v['verse']}** {v['text']}" for v in verses])
                 return formatted_text
             # Fallback to plain text
             return data['text']
