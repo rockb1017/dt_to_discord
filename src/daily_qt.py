@@ -256,8 +256,8 @@ def main():
     if ref:
         print(f"Found reference: {ref}")
         eng_text = fetch_english_text(ref)
-        kor_text = fetch_korean_text(ref)
-        
+        # kor_text = fetch_korean_text(ref)
+        kor_text = ""
         post_to_discord(ref, eng_text, kor_text)
     else:
         print("No reading scheduled for today.")
