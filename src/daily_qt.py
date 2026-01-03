@@ -43,11 +43,11 @@ def fetch_english_text(reference):
             if 'verses' in data:
                 verses = data['verses']
                 # Use single space instead of newlines for Discord compatibility
-                # Also clean newlines from individual verse texts
-                formatted_text = ' '.join([f"**{v['verse']}** {v['text'].replace(chr(10), ' ').strip()}" for v in verses])
+                # Also clean newlines from individual verse texts and replace curly quotes
+                formatted_text = ' '.join([f"**{v['verse']}** {v['text'].replace(chr(10), ' ').replace('"', '\"').replace('"', '\"').replace(''', \"'\").replace(''', \"'\").strip()}" for v in verses])
                 return formatted_text
-            # Fallback to plain text - also clean newlines
-            return data['text'].replace('\n', ' ')
+            # Fallback to plain text - also clean newlines and quotes
+            return data['text'].replace('\n', ' ').replace('"', '\"').replace('"', '\"').replace(''', \"'\").replace(''', \"'\")
     except Exception as e:
         print(f"English API Error: {e}")
     return "Error fetching English text."
