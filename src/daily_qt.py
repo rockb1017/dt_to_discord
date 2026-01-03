@@ -25,25 +25,11 @@ def get_todays_reference():
     data = sheet.get_all_records()
     
     today_str = datetime.now().strftime("%Y-%m-%d")
-    print(f"Looking for date: {today_str}")
-    print(f"Total rows in sheet: {len(data)}")
     
-    for i, row in enumerate(data, start=2):  # Start at 2 because row 1 is headers
-        date_value = row.get('Date', '')
-        print(f"Row {i}: Date='{date_value}' (type: {type(date_value).__name__}), Reference='{row.get('Reference', '')}'")
-        
-        # Try multiple date format comparisons
-        if str(date_value) == today_str:
-            print(f"✓ Match found! Row {i}")
+    for row in data:
+        # Check date (handling potential string format differences)
+        if str(row['Date']) == today_str:
             return row['Reference']
-        
-        # Try parsing if it's in a different format
-        date_str = str(date_value).strip()
-        if date_str == today_str:
-            print(f"✓ Match found (after strip)! Row {i}")
-            return row['Reference']
-    
-    print(f"No match found for {today_str}")
     return None
 
 # --- ENGLISH TEXT (API - WEB) ---
