@@ -204,7 +204,7 @@ def post_to_discord(reference, eng_text, kor_text):
 
     payload = {
         "username": "Daily DT Bot",
-        "thread_name": f"{datetime.now().strftime('%m/%d')} - {reference}",  # Required for forum channels
+        "thread_name": f"{datetime.now().strftime('%m-%d')} - {reference}",  # Required for forum channels
         "embeds": [{
             "title": f"🌿 Daily Bread: {reference}",
             "color": 3066993, # Teal
@@ -246,7 +246,7 @@ def post_to_discord(reference, eng_text, kor_text):
         # Also print the payload for debugging
         import json
         print(f"\n=== PAYLOAD DEBUG ===")
-        print(json.dumps(payload, indent=2, ensure_ascii=False)[:1000])
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
 
 # --- MAIN ---
 def main():
