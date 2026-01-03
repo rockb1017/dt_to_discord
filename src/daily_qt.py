@@ -119,12 +119,15 @@ def fetch_korean_text(reference):
                     # Remove verse number to get just the text
                     verse_num.decompose()
                     text = span.get_text(strip=True)
+                    # Clean up footnote markers like [a], [b]
+                    text = re.sub(r'\[[a-zA-Z]\]', '', text)
                     if text:
                         verses_data.append(f"**{num}** {text}")
                         print(f"  Verse {num}: {text[:50]}...")
                 else:
                     # No verse number, just text
                     text = span.get_text(strip=True)
+                    text = re.sub(r'\[[a-zA-Z]\]', '', text)
                     if text and len(text) > 3:
                         verses_data.append(text)
         
