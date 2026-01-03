@@ -42,12 +42,20 @@ def fetch_english_text(reference):
             # Check if verses array exists for verse-by-verse formatting
             if 'verses' in data:
                 verses = data['verses']
-                # Use single space instead of newlines for Discord compatibility
-                # Also clean newlines from individual verse texts and replace curly quotes
-                formatted_text = ' '.join([f"**{v['verse']}** {v['text'].replace(chr(10), ' ').replace('"', '\"').replace('"', '\"').replace(''', \"'\").replace(''', \"'\").strip()}" for v in verses])
-                return formatted_text
-            # Fallback to plain text - also clean newlines and quotes
-            return data['text'].replace('\n', ' ').replace('"', '\"').replace('"', '\"').replace(''', \"'\").replace(''', \"'\")
+                # Clean each verse text: remove newlines and replace curly quotes
+                cleaned_verses = []
+                for v in verses:
+                    text = v['text'].replace('\n', ' ').replace(chr(10), ' ')
+                    # Replace curly quotes with straight quotes
+                    text = text.replace('"', '"').replace('"', '"')
+                    text = text.replace(''', "'").replace(''', "'")
+                    cleaned_verses.append(f"**{v['verse']}** {text.strip()}")
+                return ' '.join(cleaned_verses)
+            # Fallback to plain text - also clean
+            text = data['text'].replace('\n', ' ')
+            text = text.replace('"', '"').replace('"', '"')
+            text = text.replace(''', "'").replace(''', "'")
+            return text
     except Exception as e:
         print(f"English API Error: {e}")
     return "Error fetching English text."
