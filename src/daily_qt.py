@@ -223,11 +223,11 @@ def post_to_discord(reference, eng_text, kor_text):
                     "name": "English (WEB)",
                     "value": eng_text,
                     "inline": False
-                },
-                {
-                    "name": "Korean (KOERV)",
-                    "value": kor_text,
-                    "inline": False
+                # },
+                # {
+                #     "name": "Korean (KOERV)",
+                #     "value": kor_text,
+                #     "inline": False
                 }
             ],
             "footer": {
