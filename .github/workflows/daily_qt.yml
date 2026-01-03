@@ -27,7 +27,7 @@ jobs:
       # 3. Install dependencies
       - name: Install libraries
         run: |
-          pip install gspread oauth2client requests
+          pip install gspread oauth2client requests beautifulsoup4
 
       # 4. Decode the Google Cloud Key
       # We take the Base64 secret and decode it into a physical file
