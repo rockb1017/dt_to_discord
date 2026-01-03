@@ -42,19 +42,19 @@ def fetch_english_text(reference):
             # Check if verses array exists for verse-by-verse formatting
             if 'verses' in data:
                 verses = data['verses']
-                # Clean each verse text: remove newlines and replace curly quotes
+                # Clean each verse text: remove newlines and replace special characters
                 cleaned_verses = []
                 for v in verses:
                     text = v['text'].replace('\n', ' ').replace(chr(10), ' ')
-                    # Replace curly quotes with straight quotes
-                    text = text.replace('"', '"').replace('"', '"')
-                    text = text.replace(''', "'").replace(''', "'")
+                    # Remove all curly quotes and apostrophes (Unicode characters)
+                    text = text.replace(chr(8220), '"').replace(chr(8221), '"')  # " and "
+                    text = text.replace(chr(8216), "'").replace(chr(8217), "'")  # ' and '
                     cleaned_verses.append(f"**{v['verse']}** {text.strip()}")
                 return ' '.join(cleaned_verses)
             # Fallback to plain text - also clean
             text = data['text'].replace('\n', ' ')
-            text = text.replace('"', '"').replace('"', '"')
-            text = text.replace(''', "'").replace(''', "'")
+            text = text.replace(chr(8220), '"').replace(chr(8221), '"')
+            text = text.replace(chr(8216), "'").replace(chr(8217), "'")
             return text
     except Exception as e:
         print(f"English API Error: {e}")
