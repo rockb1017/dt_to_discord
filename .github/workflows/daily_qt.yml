@@ -42,8 +42,8 @@ jobs:
         env:
           # If you hardcoded the URL in the script, remove this env var.
           # If you updated the script to use os.getenv('DISCORD_WEBHOOK_URL'), keep this.
-          # DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL_TEST }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          # DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL_TEST }}
         run: python src/daily_qt.py
 
       # 6. Cleanup (Optional but good practice)
