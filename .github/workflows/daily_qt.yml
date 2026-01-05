@@ -2,9 +2,9 @@ name: Daily QT Bot
 
 on:
   schedule:
-    # Runs at 04:00 UTC (8:00 PM PST)
+    # Runs at 03:00 UTC (7:00 PM PST)
     # You can change this using https://crontab.guru/
-    - cron: '0 4 * * *'
+    - cron: '0 3 * * *'
   
   # Allows you to run this manually from the Actions tab for testing
   workflow_dispatch:
@@ -42,7 +42,8 @@ jobs:
         env:
           # If you hardcoded the URL in the script, remove this env var.
           # If you updated the script to use os.getenv('DISCORD_WEBHOOK_URL'), keep this.
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          # DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL_TEST }}
         run: python src/daily_qt.py
 
       # 6. Cleanup (Optional but good practice)

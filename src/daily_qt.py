@@ -269,7 +269,7 @@ def post_to_discord(reference, eng_verses, kor_verses):
 
     # Create Links
     esv_link = f"https://www.biblegateway.com/passage/?search={quote(reference)}&version=ESV"
-    koerv_link = f"https://www.biblegateway.com/passage/?search={quote(reference)}&version=KOERV"
+    klb_link = f"https://www.biblegateway.com/passage/?search={quote(reference)}&version=KLB"
 
     # Build fields
     fields = [
@@ -279,8 +279,8 @@ def post_to_discord(reference, eng_verses, kor_verses):
             "inline": False
         },
         {
-            "name": "🇰🇷 쉬운성경 (KOERV) 보기",
-            "value": f"[Link]({koerv_link})",
+            "name": "🇰🇷 현대인의성경 (KLB) 보기",
+            "value": f"[Link]({klb_link})",
             "inline": False
         }
     ]
@@ -298,7 +298,7 @@ def post_to_discord(reference, eng_verses, kor_verses):
     for i, chunk in enumerate(kor_chunks):
         suffix = f" (Part {i+1})" if len(kor_chunks) > 1 else ""
         fields.append({
-            "name": f"Korean (KOERV){suffix}",
+            "name": f"Korean (KLB){suffix}",
             "value": chunk,
             "inline": False
         })
