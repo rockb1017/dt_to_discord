@@ -12,6 +12,10 @@ DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
 if not DISCORD_WEBHOOK_URL:
     raise ValueError("Error: DISCORD_WEBHOOK_URL environment variable is missing.")
 
+DISCORD_GENERAL_WEBHOOK_URL = os.getenv("DISCORD_GENERAL_WEBHOOK_URL")
+if not DISCORD_GENERAL_WEBHOOK_URL:
+    print("Warning: DISCORD_GENERAL_WEBHOOK_URL not set. Skipping general channel notification.")
+
 SHEET_NAME = "2026_Devotional_Time_Plan"
 BIBLE_API_URL = "https://bible-api.com/" 
 
@@ -258,6 +262,26 @@ def chunk_verses_by_size(verses, max_size=1024):
     return chunks if chunks else ["Error: No text to display"]
 
 
+# --- GENERAL CHANNEL NOTIFICATION ---
+def post_notification_to_general(reference):
+    """Post a simple notification to #general channel"""
+    if not DISCORD_GENERAL_WEBHOOK_URL:
+        return
+    
+    date_str = datetime.now().strftime('%m/%d')
+    payload = {
+        "username": "Daily DT Bot",
+        "content": f"📖 New Daily Devotional is up! **{date_str} - {reference}** - Check the forum channel!"
+    }
+    
+    response = requests.post(DISCORD_GENERAL_WEBHOOK_URL, json=payload)
+    
+    if response.status_code in [200, 204]:
+        print(f"✅ Notification posted to #general")
+    else:
+        print(f"⚠️ Failed to post notification to #general: {response.status_code}")
+        print(f"Response: {response.text}")
+
 # --- DISCORD POSTING ---
 def post_to_discord(reference, eng_verses, kor_verses):
     # Chunk the verses into max 1024 char segments
@@ -320,6 +344,8 @@ def post_to_discord(reference, eng_verses, kor_verses):
     
     if response.status_code in [200, 204]:
         print(f"✅ Successfully posted {reference} to Discord.")
+        # Post notification to general channel
+        post_notification_to_general(reference)
     else:
         print(f"❌ Discord webhook failed with status {response.status_code}")
         print(f"Response: {response.text}")
