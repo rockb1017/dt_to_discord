@@ -43,6 +43,9 @@ jobs:
           # If you hardcoded the URL in the script, remove this env var.
           # If you updated the script to use os.getenv('DISCORD_WEBHOOK_URL'), keep this.
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          DISCORD_GENERAL_WEBHOOK_URL: ${{ secrets.DISCORD_GENERAL_WEBHOOK_URL }}
+          DISCORD_FORUM_CHANNEL_ID: ${{ secrets.DISCORD_FORUM_CHANNEL_ID }}
+          DISCORD_SERVER_ID: ${{ secrets.DISCORD_SERVER_ID }}
           # DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL_TEST }}
         run: python src/daily_qt.py
 
