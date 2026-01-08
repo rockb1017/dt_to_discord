@@ -16,6 +16,14 @@ DISCORD_GENERAL_WEBHOOK_URL = os.getenv("DISCORD_GENERAL_WEBHOOK_URL")
 if not DISCORD_GENERAL_WEBHOOK_URL:
     print("Warning: DISCORD_GENERAL_WEBHOOK_URL not set. Skipping general channel notification.")
 
+DISCORD_FORUM_CHANNEL_ID = os.getenv("DISCORD_FORUM_CHANNEL_ID")
+if not DISCORD_FORUM_CHANNEL_ID:
+    print("Warning: DISCORD_FORUM_CHANNEL_ID not set. Notification will not include channel link.")
+
+DISCORD_SERVER_ID = os.getenv("DISCORD_SERVER_ID")
+if not DISCORD_SERVER_ID:
+    print("Warning: DISCORD_SERVER_ID not set. Notification will not include thread link.")
+
 SHEET_NAME = "2026_Devotional_Time_Plan"
 BIBLE_API_URL = "https://bible-api.com/" 
 
@@ -263,15 +271,25 @@ def chunk_verses_by_size(verses, max_size=1024):
 
 
 # --- GENERAL CHANNEL NOTIFICATION ---
-def post_notification_to_general(reference):
+def post_notification_to_general(reference, thread_url=None):
     """Post a simple notification to #general channel"""
     if not DISCORD_GENERAL_WEBHOOK_URL:
+        print("Warning: DISCORD_GENERAL_WEBHOOK_URL not set. Skipping general channel notification.")
         return
     
     date_str = datetime.now().strftime('%m/%d')
+    
+    # Create message with thread link if available
+    if thread_url:
+        message = f"📖 New Daily Devotional is up! **{date_str} - {reference}** - [Read here]({thread_url})"
+    elif DISCORD_FORUM_CHANNEL_ID:
+        message = f"📖 New Daily Devotional is up! **{date_str} - {reference}** - Check <#{DISCORD_FORUM_CHANNEL_ID}>!"
+    else:
+        message = f"📖 New Daily Devotional is up! **{date_str} - {reference}** - Check the forum channel!"
+    
     payload = {
         "username": "Daily DT Bot",
-        "content": f"📖 New Daily Devotional is up! **{date_str} - {reference}** - Check the forum channel!"
+        "content": message
     }
     
     response = requests.post(DISCORD_GENERAL_WEBHOOK_URL, json=payload)
@@ -344,8 +362,20 @@ def post_to_discord(reference, eng_verses, kor_verses):
     
     if response.status_code in [200, 204]:
         print(f"✅ Successfully posted {reference} to Discord.")
+        
+        # Try to get thread URL from response
+        thread_url = None
+        try:
+            response_data = response.json()
+            thread_id = response_data.get('id')
+            if thread_id and DISCORD_SERVER_ID:
+                thread_url = f"https://discord.com/channels/{DISCORD_SERVER_ID}/{thread_id}"
+                print(f"Thread URL: {thread_url}")
+        except:
+            pass
+        
         # Post notification to general channel
-        post_notification_to_general(reference)
+        post_notification_to_general(reference, thread_url)
     else:
         print(f"❌ Discord webhook failed with status {response.status_code}")
         print(f"Response: {response.text}")
