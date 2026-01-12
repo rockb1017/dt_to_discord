@@ -72,42 +72,43 @@ def fetch_english_text(reference):
         passage_container = soup.find('div', class_='passage-col')
         if not passage_container:
             passage_container = soup.find('div', {'class': lambda x: x and 'passage' in ' '.join(x).lower()})
-        
         if not passage_container:
             return ["Error: No passage container found"]
-        
-        # Extract verses with numbers
+
+        # Extract all verse numbers and text
         verses_data = []
-        verse_containers = passage_container.find_all('span', class_='text')
-        print(f"Found {len(verse_containers)} span.text elements")
-        
-        if verse_containers:
-            for span in verse_containers:
-                # Replace all sup tags (crossrefs, footnotes) with space to prevent word concatenation
-                for sup in span.find_all('sup'):
-                    if 'versenum' not in sup.get('class', []):
-                        sup.replace_with(' ')
-                
-                # Find verse number
-                verse_num = span.find('sup', class_='versenum')
-                if verse_num:
-                    num = verse_num.get_text(strip=True)
-                    verse_num.replace_with(' ')  # Replace with space instead of decompose
-                    
-                    # Get text and clean up
-                    text = span.get_text(separator=' ')  # Use separator=' ' to add space between elements
-                    # Clean up footnote markers and extra spaces
-                    text = re.sub(r'\[[a-zA-Z0-9]\]', ' ', text)
-                    text = re.sub(r'\s+', ' ', text)  # Clean up multiple spaces
-                    text = text.strip()
-                    if text:
-                        verses_data.append({"num": num, "text": text})
-                        print(f"  Verse {num}: {text[:50]}...")
-        
+        # Find all sup tags with class 'versenum' inside passage_container
+        for verse_num in passage_container.find_all('sup', class_='versenum'):
+            num = verse_num.get_text(strip=True)
+            # The parent span or element containing the verse text
+            parent = verse_num.find_parent('span', class_='text')
+            if not parent:
+                # Sometimes the verse number is not inside a span.text, fallback to parent
+                parent = verse_num.parent
+            # Remove all sup tags (footnotes, crossrefs) except versenum
+            for sup in parent.find_all('sup'):
+                if 'versenum' not in sup.get('class', []):
+                    sup.decompose()
+            verse_num.decompose()  # Remove the verse number itself
+            text = parent.get_text(separator=' ', strip=True)
+            # Clean up footnote markers and extra spaces
+            text = re.sub(r'\[[a-zA-Z0-9]\]', ' ', text)
+            text = re.sub(r'\s+', ' ', text)
+            text = text.strip()
+            if text:
+                verses_data.append({"num": num, "text": text})
+                print(f"  Verse {num}: {text[:50]}...")
+
         if verses_data:
             print(f"✓ Successfully extracted {len(verses_data)} verses")
             return verses_data
-        
+
+        # Fallback: try to get all text from passage_container
+        text = passage_container.get_text(separator=' ', strip=True)
+        text = re.sub(r'\s+', ' ', text)
+        text = re.sub(r'\[[a-zA-Z0-9]\]', '', text)
+        if text:
+            return [{"num": "all", "text": text}]
         return ["Error: Could not extract verses"]
         
     except Exception as e:
@@ -168,29 +169,26 @@ def fetch_korean_text(reference):
                 print(f"  - {div.get('class')}")
             return "Error: No passage container found"
         
-        # Strategy 2: Extract verses with numbers
-        print("\n--- Strategy 2: Looking for verse elements ---")
-        
-        # Method A: Look for span.text with sup.versenum
+        # Strategy 2: Extract all verse numbers and text
+        print("\n--- Strategy 2: Extracting all verse numbers and text ---")
         verses_data = []
-        verse_containers = passage_container.find_all('span', class_='text')
-        print(f"Found {len(verse_containers)} span.text elements")
-        
-        if verse_containers:
-            for span in verse_containers:
-                # Find verse number
-                verse_num = span.find('sup', class_='versenum')
-                if verse_num:
-                    num = verse_num.get_text(strip=True)
-                    # Remove verse number to get just the text
-                    verse_num.decompose()
-                    text = span.get_text(strip=True)
-                    # Clean up footnote markers like [a], [b]
-                    text = re.sub(r'\[[a-zA-Z]\]', '', text)
-                    if text:
-                        verses_data.append({"num": num, "text": text})
-                        print(f"  Verse {num}: {text[:50]}...")
-        
+        for verse_num in passage_container.find_all('sup', class_='versenum'):
+            num = verse_num.get_text(strip=True)
+            parent = verse_num.find_parent('span', class_='text')
+            if not parent:
+                parent = verse_num.parent
+            for sup in parent.find_all('sup'):
+                if 'versenum' not in sup.get('class', []):
+                    sup.decompose()
+            verse_num.decompose()
+            text = parent.get_text(separator=' ', strip=True)
+            text = re.sub(r'\[[a-zA-Z]\]', '', text)
+            text = re.sub(r'\s+', ' ', text)
+            text = text.strip()
+            if text:
+                verses_data.append({"num": num, "text": text})
+                print(f"  Verse {num}: {text[:50]}...")
+
         if verses_data:
             print(f"\n✓ Successfully extracted {len(verses_data)} verse segments")
             return verses_data
