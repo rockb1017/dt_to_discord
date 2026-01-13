@@ -6,6 +6,7 @@ from datetime import datetime
 import re
 import os
 from urllib.parse import quote
+import copy
 
 # --- CONFIGURATION ---
 DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
@@ -78,23 +79,70 @@ def fetch_english_text(reference):
         # Extract all verse numbers and text
         verses_data = []
         # Find all sup tags with class 'versenum' inside passage_container
-        for verse_num in passage_container.find_all('sup', class_='versenum'):
+        verse_nums = passage_container.find_all('sup', class_='versenum')
+        
+        for i, verse_num in enumerate(verse_nums):
             num = verse_num.get_text(strip=True)
-            # The parent span or element containing the verse text
+            
+            # Find the parent span.text
             parent = verse_num.find_parent('span', class_='text')
             if not parent:
-                # Sometimes the verse number is not inside a span.text, fallback to parent
                 parent = verse_num.parent
-            # Remove all sup tags (footnotes, crossrefs) except versenum
-            for sup in parent.find_all('sup'):
-                if 'versenum' not in sup.get('class', []):
-                    sup.decompose()
-            verse_num.decompose()  # Remove the verse number itself
-            text = parent.get_text(separator=' ', strip=True)
-            # Clean up footnote markers and extra spaces
-            text = re.sub(r'\[[a-zA-Z0-9]\]', ' ', text)
+            
+            # Clone the parent to avoid modifying the original DOM
+            parent_copy = copy.copy(parent)
+            
+            # Remove all sup tags (verse numbers, cross-references, footnotes)
+            for sup in parent_copy.find_all('sup'):
+                sup.decompose()
+            
+            # Get text from cleaned parent
+            verse_parts = [parent_copy.get_text(separator=' ', strip=True)]
+            
+            # Check siblings for continuation (e.g., indent spans after line breaks)
+            sibling = parent.next_sibling
+            next_verse_num = verse_nums[i+1] if i+1 < len(verse_nums) else None
+            
+            sibling_count = 0
+            while sibling and sibling_count < 10:
+                # Stop if we hit the next verse
+                if next_verse_num and hasattr(sibling, 'find') and sibling.find(lambda tag: tag == next_verse_num):
+                    break
+                
+                if hasattr(sibling, 'name') and sibling.name:
+                    # Check if it's a span.text with a verse number (next verse)
+                    if sibling.name == 'span' and 'text' in sibling.get('class', []):
+                        # Check if it contains a sup.versenum (indicating a new verse)
+                        if sibling.find('sup', class_='versenum'):
+                            break
+                        # Otherwise, it's a continuation of the same verse, include it
+                        sibling_copy = copy.copy(sibling)
+                        for sup in sibling_copy.find_all('sup'):
+                            sup.decompose()
+                        sibling_text = sibling_copy.get_text(separator=' ', strip=True)
+                        if sibling_text:
+                            verse_parts.append(sibling_text)
+                    # Include text from br and other spans (like indent-1)
+                    elif sibling.name in ['br', 'span']:
+                        sibling_copy = copy.copy(sibling)
+                        # Remove sups from sibling too
+                        for sup in sibling_copy.find_all('sup'):
+                            sup.decompose()
+                        sibling_text = sibling_copy.get_text(separator=' ', strip=True)
+                        if sibling_text:
+                            verse_parts.append(sibling_text)
+                
+                sibling = sibling.next_sibling
+                sibling_count += 1
+            
+            # Combine all parts
+            text = ' '.join(verse_parts)
+            # Clean up footnote markers like [a], [b], etc.
+            text = re.sub(r'\[[a-zA-Z0-9]\]', '', text)
+            # Normalize whitespace
             text = re.sub(r'\s+', ' ', text)
             text = text.strip()
+            
             if text:
                 verses_data.append({"num": num, "text": text})
                 print(f"  Verse {num}: {text[:50]}...")
@@ -117,15 +165,15 @@ def fetch_english_text(reference):
         traceback.print_exc()
         return [f"Error: {str(e)}"]
 
-# --- KOREAN TEXT (SCRAPER - KOERV) ---
+# --- KOREAN TEXT (SCRAPER - KLB) ---
 def fetch_korean_text(reference):
-    # Scrapes 쉬운성경 (KOERV) from BibleGateway
+    # Scrapes 현대인의성경 (KLB) from BibleGateway
     from bs4 import BeautifulSoup
     
     url = "https://www.biblegateway.com/passage/"
     params = {
         "search": reference,
-        "version": "KOERV"
+        "version": "KLB"
     }
     
     headers = {
@@ -134,7 +182,7 @@ def fetch_korean_text(reference):
     
     try:
         response = requests.get(url, params=params, headers=headers)
-        print(f"\n=== KOREAN SCRAPER DEBUG ===")
+        print(f"\n=== KOREAN SCRAPER DEBUG (KLB) ===")
         print(f"URL: {response.url}")
         print(f"Status: {response.status_code}")
         print(f"HTML Length: {len(response.content)} bytes")
@@ -172,19 +220,70 @@ def fetch_korean_text(reference):
         # Strategy 2: Extract all verse numbers and text
         print("\n--- Strategy 2: Extracting all verse numbers and text ---")
         verses_data = []
-        for verse_num in passage_container.find_all('sup', class_='versenum'):
+        verse_nums = passage_container.find_all('sup', class_='versenum')
+        
+        for i, verse_num in enumerate(verse_nums):
             num = verse_num.get_text(strip=True)
+            
+            # Find the parent span.text
             parent = verse_num.find_parent('span', class_='text')
             if not parent:
                 parent = verse_num.parent
-            for sup in parent.find_all('sup'):
-                if 'versenum' not in sup.get('class', []):
-                    sup.decompose()
-            verse_num.decompose()
-            text = parent.get_text(separator=' ', strip=True)
+            
+            # Clone the parent to avoid modifying the original DOM
+            parent_copy = copy.copy(parent)
+            
+            # Remove all sup tags (verse numbers, footnotes)
+            for sup in parent_copy.find_all('sup'):
+                sup.decompose()
+            
+            # Get text from cleaned parent
+            verse_parts = [parent_copy.get_text(separator=' ', strip=True)]
+            
+            # Check siblings for continuation (e.g., indent spans after line breaks)
+            sibling = parent.next_sibling
+            next_verse_num = verse_nums[i+1] if i+1 < len(verse_nums) else None
+            
+            sibling_count = 0
+            while sibling and sibling_count < 10:
+                # Stop if we hit the next verse
+                if next_verse_num and hasattr(sibling, 'find') and sibling.find(lambda tag: tag == next_verse_num):
+                    break
+                
+                if hasattr(sibling, 'name') and sibling.name:
+                    # Check if it's a span.text with a verse number (next verse)
+                    if sibling.name == 'span' and 'text' in sibling.get('class', []):
+                        # Check if it contains a sup.versenum (indicating a new verse)
+                        if sibling.find('sup', class_='versenum'):
+                            break
+                        # Otherwise, it's a continuation of the same verse, include it
+                        sibling_copy = copy.copy(sibling)
+                        for sup in sibling_copy.find_all('sup'):
+                            sup.decompose()
+                        sibling_text = sibling_copy.get_text(separator=' ', strip=True)
+                        if sibling_text:
+                            verse_parts.append(sibling_text)
+                    # Include text from br and other spans (like indent-1)
+                    elif sibling.name in ['br', 'span']:
+                        sibling_copy = copy.copy(sibling)
+                        # Remove sups from sibling too
+                        for sup in sibling_copy.find_all('sup'):
+                            sup.decompose()
+                        sibling_text = sibling_copy.get_text(separator=' ', strip=True)
+                        if sibling_text:
+                            verse_parts.append(sibling_text)
+                
+                sibling = sibling.next_sibling
+                sibling_count += 1
+            
+            # Combine all parts
+            text = ' '.join(verse_parts)
+            # Clean up footnote markers
             text = re.sub(r'\[[a-zA-Z]\]', '', text)
+            # Normalize whitespace
             text = re.sub(r'\s+', ' ', text)
             text = text.strip()
+            
             if text:
                 verses_data.append({"num": num, "text": text})
                 print(f"  Verse {num}: {text[:50]}...")
