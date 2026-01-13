@@ -464,7 +464,8 @@ def post_to_discord(reference, eng_verses, kor_verses):
         thread_url = None
         try:
             response_data = response.json()
-            thread_id = response_data.get('id')
+            # For forum channels, channel_id contains the thread ID where the message was posted
+            thread_id = response_data.get('channel_id')
             if thread_id and DISCORD_SERVER_ID:
                 thread_url = f"https://discord.com/channels/{DISCORD_SERVER_ID}/{thread_id}"
                 print(f"Thread URL: {thread_url}")
