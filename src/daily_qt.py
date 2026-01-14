@@ -9,20 +9,24 @@ from urllib.parse import quote
 import copy
 
 # --- CONFIGURATION ---
+# Check if running in test mode
+import sys
+TEST_MODE = "--test" in sys.argv
+
 DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
-if not DISCORD_WEBHOOK_URL:
+if not DISCORD_WEBHOOK_URL and not TEST_MODE:
     raise ValueError("Error: DISCORD_WEBHOOK_URL environment variable is missing.")
 
 DISCORD_GENERAL_WEBHOOK_URL = os.getenv("DISCORD_GENERAL_WEBHOOK_URL")
-if not DISCORD_GENERAL_WEBHOOK_URL:
+if not DISCORD_GENERAL_WEBHOOK_URL and not TEST_MODE:
     print("Warning: DISCORD_GENERAL_WEBHOOK_URL not set. Skipping general channel notification.")
 
 DISCORD_FORUM_CHANNEL_ID = os.getenv("DISCORD_FORUM_CHANNEL_ID")
-if not DISCORD_FORUM_CHANNEL_ID:
+if not DISCORD_FORUM_CHANNEL_ID and not TEST_MODE:
     print("Warning: DISCORD_FORUM_CHANNEL_ID not set. Notification will not include channel link.")
 
 DISCORD_SERVER_ID = os.getenv("DISCORD_SERVER_ID")
-if not DISCORD_SERVER_ID:
+if not DISCORD_SERVER_ID and not TEST_MODE:
     print("Warning: DISCORD_SERVER_ID not set. Notification will not include thread link.")
 
 SHEET_NAME = "2026_Devotional_Time_Plan"
@@ -81,6 +85,30 @@ def fetch_english_text(reference):
         # Find all sup tags with class 'versenum' inside passage_container
         verse_nums = passage_container.find_all('sup', class_='versenum')
         
+        # Check if verse 1 is missing (often the first verse doesn't have a number displayed)
+        if verse_nums and verse_nums[0].get_text(strip=True) != "1":
+            # Find the first span.text that appears before the first verse number
+            first_verse_num = verse_nums[0]
+            first_text_span = passage_container.find('span', class_='text')
+            
+            if first_text_span:
+                # Get all text before the first verse number
+                text_parts = []
+                for element in first_text_span.descendants:
+                    if element == first_verse_num:
+                        break
+                    if hasattr(element, 'string') and element.string and element.name != 'sup':
+                        text_parts.append(element.string.strip())
+                
+                verse_1_text = ' '.join(text_parts).strip()
+                # Clean up
+                verse_1_text = re.sub(r'\[[a-zA-Z0-9]\]', '', verse_1_text)
+                verse_1_text = re.sub(r'\s+', ' ', verse_1_text)
+                
+                if verse_1_text and len(verse_1_text) > 10:  # Only add if substantial text
+                    verses_data.append({"num": "1", "text": verse_1_text})
+                    print(f"  Verse 1: {verse_1_text[:50]}...")
+        
         for i, verse_num in enumerate(verse_nums):
             num = verse_num.get_text(strip=True)
             
@@ -88,6 +116,13 @@ def fetch_english_text(reference):
             parent = verse_num.find_parent('span', class_='text')
             if not parent:
                 parent = verse_num.parent
+            
+            # Get the verse class (e.g., 'Luke-3-4') to find continuation spans
+            verse_class = None
+            for cls in parent.get('class', []):
+                if '-' in cls and any(char.isdigit() for char in cls):
+                    verse_class = cls
+                    break
             
             # Clone the parent to avoid modifying the original DOM
             parent_copy = copy.copy(parent)
@@ -99,41 +134,42 @@ def fetch_english_text(reference):
             # Get text from cleaned parent
             verse_parts = [parent_copy.get_text(separator=' ', strip=True)]
             
-            # Check siblings for continuation (e.g., indent spans after line breaks)
-            sibling = parent.next_sibling
-            next_verse_num = verse_nums[i+1] if i+1 < len(verse_nums) else None
-            
-            sibling_count = 0
-            while sibling and sibling_count < 10:
-                # Stop if we hit the next verse
-                if next_verse_num and hasattr(sibling, 'find') and sibling.find(lambda tag: tag == next_verse_num):
+            # Get the verse class (e.g., 'Luke-3-4') to identify continuation spans
+            verse_class = None
+            for cls in parent.get('class', []):
+                if '-' in cls and any(char.isdigit() for char in cls):
+                    verse_class = cls
                     break
+            
+            # Find all continuation spans (both siblings and other spans with same verse class)
+            # We'll look for all spans with the same verse class that come after this one
+            if verse_class:
+                all_text_spans = passage_container.find_all('span', class_='text')
+                found_current = False
+                next_verse_num = verse_nums[i+1] if i+1 < len(verse_nums) else None
                 
-                if hasattr(sibling, 'name') and sibling.name:
-                    # Check if it's a span.text with a verse number (next verse)
-                    if sibling.name == 'span' and 'text' in sibling.get('class', []):
-                        # Check if it contains a sup.versenum (indicating a new verse)
-                        if sibling.find('sup', class_='versenum'):
-                            break
-                        # Otherwise, it's a continuation of the same verse, include it
-                        sibling_copy = copy.copy(sibling)
-                        for sup in sibling_copy.find_all('sup'):
+                for span in all_text_spans:
+                    if span == parent:
+                        found_current = True
+                        continue
+                    
+                    if not found_current:
+                        continue
+                    
+                    # Stop if we hit a span with the next verse number
+                    if next_verse_num and next_verse_num in span.descendants:
+                        break
+                    
+                    # Check if this span has the same verse class and no verse number
+                    span_classes = span.get('class', [])
+                    if verse_class in span_classes and not span.find('sup', class_='versenum'):
+                        # This is a continuation span
+                        span_copy = copy.copy(span)
+                        for sup in span_copy.find_all('sup'):
                             sup.decompose()
-                        sibling_text = sibling_copy.get_text(separator=' ', strip=True)
-                        if sibling_text:
-                            verse_parts.append(sibling_text)
-                    # Include text from br and other spans (like indent-1)
-                    elif sibling.name in ['br', 'span']:
-                        sibling_copy = copy.copy(sibling)
-                        # Remove sups from sibling too
-                        for sup in sibling_copy.find_all('sup'):
-                            sup.decompose()
-                        sibling_text = sibling_copy.get_text(separator=' ', strip=True)
-                        if sibling_text:
-                            verse_parts.append(sibling_text)
-                
-                sibling = sibling.next_sibling
-                sibling_count += 1
+                        span_text = span_copy.get_text(separator=' ', strip=True)
+                        if span_text:
+                            verse_parts.append(span_text)
             
             # Combine all parts
             text = ' '.join(verse_parts)
@@ -222,6 +258,28 @@ def fetch_korean_text(reference):
         verses_data = []
         verse_nums = passage_container.find_all('sup', class_='versenum')
         
+        # Check if verse 1 is missing (often the first verse doesn't have a number displayed)
+        if verse_nums and verse_nums[0].get_text(strip=True) != "1":
+            # Look for all text spans with the first verse class (e.g., Luke-3-1)
+            all_text_spans = passage_container.find_all('span', class_='text')
+            
+            for span in all_text_spans:
+                # Check if this span doesn't have a verse number and appears to be verse 1
+                if not span.find('sup', class_='versenum'):
+                    text = span.get_text(strip=True)
+                    # Skip headings (typically short and don't start with numbers or have substantial content)
+                    if len(text) > 20 and not text.endswith('시작'):  # Skip headings ending with "시작" (beginning)
+                        # Clean up the text
+                        text = re.sub(r'\[[a-zA-Z]\]', '', text)
+                        text = re.sub(r'\s+', ' ', text)
+                        # Sometimes verse 1 text has leading number, remove it
+                        text = re.sub(r'^[0-9]+', '', text).strip()
+                        
+                        if text and len(text) > 10:
+                            verses_data.append({"num": "1", "text": text})
+                            print(f"  Verse 1: {text[:50]}...")
+                            break
+        
         for i, verse_num in enumerate(verse_nums):
             num = verse_num.get_text(strip=True)
             
@@ -229,6 +287,13 @@ def fetch_korean_text(reference):
             parent = verse_num.find_parent('span', class_='text')
             if not parent:
                 parent = verse_num.parent
+            
+            # Get the verse class (e.g., 'Luke-3-4') to find continuation spans
+            verse_class = None
+            for cls in parent.get('class', []):
+                if '-' in cls and any(char.isdigit() for char in cls):
+                    verse_class = cls
+                    break
             
             # Clone the parent to avoid modifying the original DOM
             parent_copy = copy.copy(parent)
@@ -240,41 +305,42 @@ def fetch_korean_text(reference):
             # Get text from cleaned parent
             verse_parts = [parent_copy.get_text(separator=' ', strip=True)]
             
-            # Check siblings for continuation (e.g., indent spans after line breaks)
-            sibling = parent.next_sibling
-            next_verse_num = verse_nums[i+1] if i+1 < len(verse_nums) else None
-            
-            sibling_count = 0
-            while sibling and sibling_count < 10:
-                # Stop if we hit the next verse
-                if next_verse_num and hasattr(sibling, 'find') and sibling.find(lambda tag: tag == next_verse_num):
+            # Get the verse class (e.g., 'Luke-3-4') to identify continuation spans
+            verse_class = None
+            for cls in parent.get('class', []):
+                if '-' in cls and any(char.isdigit() for char in cls):
+                    verse_class = cls
                     break
+            
+            # Find all continuation spans (both siblings and other spans with same verse class)
+            # We'll look for all spans with the same verse class that come after this one
+            if verse_class:
+                all_text_spans = passage_container.find_all('span', class_='text')
+                found_current = False
+                next_verse_num = verse_nums[i+1] if i+1 < len(verse_nums) else None
                 
-                if hasattr(sibling, 'name') and sibling.name:
-                    # Check if it's a span.text with a verse number (next verse)
-                    if sibling.name == 'span' and 'text' in sibling.get('class', []):
-                        # Check if it contains a sup.versenum (indicating a new verse)
-                        if sibling.find('sup', class_='versenum'):
-                            break
-                        # Otherwise, it's a continuation of the same verse, include it
-                        sibling_copy = copy.copy(sibling)
-                        for sup in sibling_copy.find_all('sup'):
+                for span in all_text_spans:
+                    if span == parent:
+                        found_current = True
+                        continue
+                    
+                    if not found_current:
+                        continue
+                    
+                    # Stop if we hit a span with the next verse number
+                    if next_verse_num and next_verse_num in span.descendants:
+                        break
+                    
+                    # Check if this span has the same verse class and no verse number
+                    span_classes = span.get('class', [])
+                    if verse_class in span_classes and not span.find('sup', class_='versenum'):
+                        # This is a continuation span
+                        span_copy = copy.copy(span)
+                        for sup in span_copy.find_all('sup'):
                             sup.decompose()
-                        sibling_text = sibling_copy.get_text(separator=' ', strip=True)
-                        if sibling_text:
-                            verse_parts.append(sibling_text)
-                    # Include text from br and other spans (like indent-1)
-                    elif sibling.name in ['br', 'span']:
-                        sibling_copy = copy.copy(sibling)
-                        # Remove sups from sibling too
-                        for sup in sibling_copy.find_all('sup'):
-                            sup.decompose()
-                        sibling_text = sibling_copy.get_text(separator=' ', strip=True)
-                        if sibling_text:
-                            verse_parts.append(sibling_text)
-                
-                sibling = sibling.next_sibling
-                sibling_count += 1
+                        span_text = span_copy.get_text(separator=' ', strip=True)
+                        if span_text:
+                            verse_parts.append(span_text)
             
             # Combine all parts
             text = ' '.join(verse_parts)
@@ -340,7 +406,18 @@ def chunk_verses_by_size(verses, max_size=1024):
     current_chunk = ""
     
     for verse in verses:
-        verse_text = f"**{verse['num']}** {verse['text']}"
+        # Ensure verse is a dict and has required keys
+        if not isinstance(verse, dict) or 'num' not in verse or 'text' not in verse:
+            print(f"Warning: Invalid verse data: {type(verse)}")
+            continue
+        
+        # Ensure text is a string
+        text_value = verse['text']
+        if not isinstance(text_value, str):
+            print(f"Warning: verse['text'] is {type(text_value)}, not str. Converting...")
+            text_value = str(text_value) if text_value else ""
+        
+        verse_text = f"**{verse['num']}** {text_value}"
         
         # Check if adding this verse would exceed the limit
         if current_chunk:
@@ -398,13 +475,24 @@ def post_notification_to_general(reference, thread_url=None):
         print(f"Response: {response.text}")
 
 # --- DISCORD POSTING ---
-def post_to_discord(reference, eng_verses, kor_verses):
+def post_to_discord(reference, eng_verses, kor_verses, test_mode=False):
     # Chunk the verses into max 1024 char segments
     eng_chunks = chunk_verses_by_size(eng_verses, max_size=1024)
     kor_chunks = chunk_verses_by_size(kor_verses, max_size=1024)
     
     print(f"English chunks: {len(eng_chunks)}")
     print(f"Korean chunks: {len(kor_chunks)}")
+    
+    # Debug: check chunk types
+    for i, chunk in enumerate(eng_chunks):
+        if not isinstance(chunk, str):
+            print(f"ERROR: English chunk {i} is {type(chunk)}, not str!")
+            eng_chunks[i] = str(chunk)  # Force convert to string
+    
+    for i, chunk in enumerate(kor_chunks):
+        if not isinstance(chunk, str):
+            print(f"ERROR: Korean chunk {i} is {type(chunk)}, not str!")
+            kor_chunks[i] = str(chunk)  # Force convert to string
 
     # Create Links
     esv_link = f"https://www.biblegateway.com/passage/?search={quote(reference)}&version=ESV"
@@ -455,6 +543,25 @@ def post_to_discord(reference, eng_verses, kor_verses):
         }]
     }
 
+    if test_mode:
+        print(f"\n{'='*60}")
+        print(f"TEST MODE - Not posting to Discord")
+        print(f"{'='*60}")
+        import json
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        print(f"\n{'='*60}")
+        print(f"English chunks preview:")
+        for i, chunk in enumerate(eng_chunks):
+            print(f"\nChunk {i+1}:")
+            print(chunk[:200] + "..." if len(chunk) > 200 else chunk)
+        print(f"\n{'='*60}")
+        print(f"Korean chunks preview:")
+        for i, chunk in enumerate(kor_chunks):
+            print(f"\nChunk {i+1}:")
+            print(chunk[:200] + "..." if len(chunk) > 200 else chunk)
+        print(f"{'='*60}")
+        return
+    
     response = requests.post(DISCORD_WEBHOOK_URL, json=payload)
     
     if response.status_code in [200, 204]:
@@ -483,7 +590,7 @@ def post_to_discord(reference, eng_verses, kor_verses):
         print(json.dumps(payload, indent=2, ensure_ascii=False))
 
 # --- MAIN ---
-def main():
+def main(test_mode=False):
     print("Checking for today's reading...")
     ref = get_todays_reference()
     
@@ -491,9 +598,11 @@ def main():
         print(f"Found reference: {ref}")
         eng_verses = fetch_english_text(ref)
         kor_verses = fetch_korean_text(ref)
-        post_to_discord(ref, eng_verses, kor_verses)
+        post_to_discord(ref, eng_verses, kor_verses, test_mode=test_mode)
     else:
         print("No reading scheduled for today.")
 
 if __name__ == "__main__":
-    main()
+    import sys
+    test_mode = "--test" in sys.argv
+    main(test_mode=test_mode)
