@@ -1,12 +1,11 @@
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import requests
-from bs4 import BeautifulSoup
 from datetime import datetime
 import re
 import os
 from urllib.parse import quote
-import copy
+import json
 
 # --- CONFIGURATION ---
 # Check if running in test mode
@@ -30,7 +29,6 @@ if not DISCORD_SERVER_ID and not TEST_MODE:
     print("Warning: DISCORD_SERVER_ID not set. Notification will not include thread link.")
 
 SHEET_NAME = "2026_Devotional_Time_Plan"
-BIBLE_API_URL = "https://bible-api.com/" 
 
 # --- GOOGLE SHEETS ---
 def get_todays_reference():
@@ -49,347 +47,115 @@ def get_todays_reference():
             return row['Reference']
     return None
 
-# --- ENGLISH TEXT (SCRAPER - ESV) ---
+# --- ENGLISH TEXT (JSON - ESV) ---
 def fetch_english_text(reference):
-    # Scrapes ESV from BibleGateway
-    url = "https://www.biblegateway.com/passage/"
-    params = {
-        "search": reference,
-        "version": "ESV"
-    }
-    
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
-    }
-    
+    # Reads ESV from bible-esv.json
     try:
-        response = requests.get(url, params=params, headers=headers)
-        print(f"\n=== ENGLISH SCRAPER DEBUG ===")
-        print(f"URL: {response.url}")
-        print(f"Status: {response.status_code}")
+        print(f"\n=== ENGLISH (ESV) ===")
+        print(f"Reference: {reference}")
         
-        if response.status_code != 200:
-            return ["Error: HTTP {response.status_code}"]
-            
-        soup = BeautifulSoup(response.content, 'html.parser')
+        # Load JSON file
+        with open('src/bible-esv.json', 'r', encoding='utf-8') as f:
+            bible_data = json.load(f)
         
-        # Find passage container
-        passage_container = soup.find('div', class_='passage-col')
-        if not passage_container:
-            passage_container = soup.find('div', {'class': lambda x: x and 'passage' in ' '.join(x).lower()})
-        if not passage_container:
-            return ["Error: No passage container found"]
-
-        # Extract all verse numbers and text
+        # Parse reference (e.g., "Luke 3:1-9" or "Genesis 1:1-3")
+        match = re.match(r'([123]?\s*[A-Za-z]+)\s+(\d+):(\d+)(?:-(\d+))?', reference)
+        if not match:
+            return [f"Error: Could not parse reference: {reference}"]
+        
+        book, chapter, start_verse, end_verse = match.groups()
+        book = book.strip()
+        chapter = str(chapter)
+        start_verse = int(start_verse)
+        end_verse = int(end_verse) if end_verse else start_verse
+        
+        # Check if book exists
+        if book not in bible_data:
+            return [f"Error: Book '{book}' not found in ESV JSON"]
+        
+        # Check if chapter exists
+        if chapter not in bible_data[book]:
+            return [f"Error: Chapter {chapter} not found in {book}"]
+        
+        # Extract verses
         verses_data = []
-        # Find all sup tags with class 'versenum' inside passage_container
-        verse_nums = passage_container.find_all('sup', class_='versenum')
+        chapter_data = bible_data[book][chapter]
         
-        # Check if verse 1 is missing (often the first verse doesn't have a number displayed)
-        if verse_nums and verse_nums[0].get_text(strip=True) != "1":
-            # Find the first span.text that appears before the first verse number
-            first_verse_num = verse_nums[0]
-            first_text_span = passage_container.find('span', class_='text')
-            
-            if first_text_span:
-                # Get all text before the first verse number
-                text_parts = []
-                for element in first_text_span.descendants:
-                    if element == first_verse_num:
-                        break
-                    if hasattr(element, 'string') and element.string and element.name != 'sup':
-                        text_parts.append(element.string.strip())
-                
-                verse_1_text = ' '.join(text_parts).strip()
-                # Clean up
-                verse_1_text = re.sub(r'\[[a-zA-Z0-9]\]', '', verse_1_text)
-                verse_1_text = re.sub(r'\s+', ' ', verse_1_text)
-                
-                if verse_1_text and len(verse_1_text) > 10:  # Only add if substantial text
-                    verses_data.append({"num": "1", "text": verse_1_text})
-                    print(f"  Verse 1: {verse_1_text[:50]}...")
+        for verse_num in range(start_verse, end_verse + 1):
+            verse_str = str(verse_num)
+            if verse_str in chapter_data:
+                text = chapter_data[verse_str]
+                verses_data.append({"num": verse_str, "text": text})
+                print(f"  Verse {verse_num}: {text[:50]}...")
+            else:
+                print(f"  Warning: Verse {verse_num} not found")
         
-        for i, verse_num in enumerate(verse_nums):
-            num = verse_num.get_text(strip=True)
-            
-            # Find the parent span.text
-            parent = verse_num.find_parent('span', class_='text')
-            if not parent:
-                parent = verse_num.parent
-            
-            # Get the verse class (e.g., 'Luke-3-4') to find continuation spans
-            verse_class = None
-            for cls in parent.get('class', []):
-                if '-' in cls and any(char.isdigit() for char in cls):
-                    verse_class = cls
-                    break
-            
-            # Clone the parent to avoid modifying the original DOM
-            parent_copy = copy.copy(parent)
-            
-            # Remove all sup tags (verse numbers, cross-references, footnotes)
-            for sup in parent_copy.find_all('sup'):
-                sup.decompose()
-            
-            # Get text from cleaned parent
-            verse_parts = [parent_copy.get_text(separator=' ', strip=True)]
-            
-            # Get the verse class (e.g., 'Luke-3-4') to identify continuation spans
-            verse_class = None
-            for cls in parent.get('class', []):
-                if '-' in cls and any(char.isdigit() for char in cls):
-                    verse_class = cls
-                    break
-            
-            # Find all continuation spans (both siblings and other spans with same verse class)
-            # We'll look for all spans with the same verse class that come after this one
-            if verse_class:
-                all_text_spans = passage_container.find_all('span', class_='text')
-                found_current = False
-                next_verse_num = verse_nums[i+1] if i+1 < len(verse_nums) else None
-                
-                for span in all_text_spans:
-                    if span == parent:
-                        found_current = True
-                        continue
-                    
-                    if not found_current:
-                        continue
-                    
-                    # Stop if we hit a span with the next verse number
-                    if next_verse_num and next_verse_num in span.descendants:
-                        break
-                    
-                    # Check if this span has the same verse class and no verse number
-                    span_classes = span.get('class', [])
-                    if verse_class in span_classes and not span.find('sup', class_='versenum'):
-                        # This is a continuation span
-                        span_copy = copy.copy(span)
-                        for sup in span_copy.find_all('sup'):
-                            sup.decompose()
-                        span_text = span_copy.get_text(separator=' ', strip=True)
-                        if span_text:
-                            verse_parts.append(span_text)
-            
-            # Combine all parts
-            text = ' '.join(verse_parts)
-            # Clean up footnote markers like [a], [b], etc.
-            text = re.sub(r'\[[a-zA-Z0-9]\]', '', text)
-            # Normalize whitespace
-            text = re.sub(r'\s+', ' ', text)
-            text = text.strip()
-            
-            if text:
-                verses_data.append({"num": num, "text": text})
-                print(f"  Verse {num}: {text[:50]}...")
-
         if verses_data:
             print(f"✓ Successfully extracted {len(verses_data)} verses")
             return verses_data
-
-        # Fallback: try to get all text from passage_container
-        text = passage_container.get_text(separator=' ', strip=True)
-        text = re.sub(r'\s+', ' ', text)
-        text = re.sub(r'\[[a-zA-Z0-9]\]', '', text)
-        if text:
-            return [{"num": "all", "text": text}]
-        return ["Error: Could not extract verses"]
+        else:
+            return [f"Error: No verses found for {reference}"]
         
     except Exception as e:
-        print(f"\nEnglish Scraper Error: {e}")
+        print(f"\nEnglish JSON Error: {e}")
         import traceback
         traceback.print_exc()
         return [f"Error: {str(e)}"]
 
-# --- KOREAN TEXT (SCRAPER - KLB) ---
+# --- KOREAN TEXT (JSON - RNKSV) ---
 def fetch_korean_text(reference):
-    # Scrapes 현대인의성경 (KLB) from BibleGateway
-    from bs4 import BeautifulSoup
-    
-    url = "https://www.biblegateway.com/passage/"
-    params = {
-        "search": reference,
-        "version": "KLB"
-    }
-    
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
-    }
-    
+    # Reads 개역개정 (RNKSV) from bible-rnksv.json
     try:
-        response = requests.get(url, params=params, headers=headers)
-        print(f"\n=== KOREAN SCRAPER DEBUG (KLB) ===")
-        print(f"URL: {response.url}")
-        print(f"Status: {response.status_code}")
-        print(f"HTML Length: {len(response.content)} bytes")
+        print(f"\n=== KOREAN (RNKSV) ===")
+        print(f"Reference: {reference}")
         
-        if response.status_code != 200:
-            return f"Error: HTTP {response.status_code}"
-            
-        soup = BeautifulSoup(response.content, 'html.parser')
+        # Load JSON file
+        with open('src/bible-rnksv.json', 'r', encoding='utf-8') as f:
+            bible_data = json.load(f)
         
-        # Strategy 1: Find main passage container
-        print("\n--- Strategy 1: Looking for passage containers ---")
-        containers = [
-            soup.find('div', class_='passage-col'),
-            soup.find('div', class_='passage-content'),
-            soup.find('div', class_='passages'),
-            soup.find('div', {'class': lambda x: x and 'passage' in ' '.join(x).lower()})
-        ]
+        # Parse reference (e.g., "Luke 3:1-9" or "Genesis 1:1-3")
+        match = re.match(r'([123]?\s*[A-Za-z]+)\s+(\d+):(\d+)(?:-(\d+))?', reference)
+        if not match:
+            return [f"Error: Could not parse reference: {reference}"]
         
-        passage_container = None
-        for i, container in enumerate(containers):
-            if container:
-                print(f"Found container method {i+1}: {container.get('class')}")
-                passage_container = container
-                break
+        book, chapter, start_verse, end_verse = match.groups()
+        book = book.strip()
+        chapter = str(chapter)
+        start_verse = int(start_verse)
+        end_verse = int(end_verse) if end_verse else start_verse
         
-        if not passage_container:
-            print("No passage container found!")
-            # Debug: Print all div classes
-            all_divs = soup.find_all('div', class_=True)[:20]
-            print(f"\nFirst 20 div classes found:")
-            for div in all_divs:
-                print(f"  - {div.get('class')}")
-            return "Error: No passage container found"
+        # Check if book exists
+        if book not in bible_data:
+            return [f"Error: Book '{book}' not found in RNKSV JSON"]
         
-        # Strategy 2: Extract all verse numbers and text
-        print("\n--- Strategy 2: Extracting all verse numbers and text ---")
+        # Check if chapter exists
+        if chapter not in bible_data[book]:
+            return [f"Error: Chapter {chapter} not found in {book}"]
+        
+        # Extract verses
         verses_data = []
-        verse_nums = passage_container.find_all('sup', class_='versenum')
+        chapter_data = bible_data[book][chapter]
         
-        # Check if verse 1 is missing (often the first verse doesn't have a number displayed)
-        if verse_nums and verse_nums[0].get_text(strip=True) != "1":
-            # Look for all text spans with the first verse class (e.g., Luke-3-1)
-            all_text_spans = passage_container.find_all('span', class_='text')
-            
-            for span in all_text_spans:
-                # Check if this span doesn't have a verse number and appears to be verse 1
-                if not span.find('sup', class_='versenum'):
-                    text = span.get_text(strip=True)
-                    # Skip headings (typically short and don't start with numbers or have substantial content)
-                    if len(text) > 20 and not text.endswith('시작'):  # Skip headings ending with "시작" (beginning)
-                        # Clean up the text
-                        text = re.sub(r'\[[a-zA-Z]\]', '', text)
-                        text = re.sub(r'\s+', ' ', text)
-                        # Sometimes verse 1 text has leading number, remove it
-                        text = re.sub(r'^[0-9]+', '', text).strip()
-                        
-                        if text and len(text) > 10:
-                            verses_data.append({"num": "1", "text": text})
-                            print(f"  Verse 1: {text[:50]}...")
-                            break
+        for verse_num in range(start_verse, end_verse + 1):
+            verse_str = str(verse_num)
+            if verse_str in chapter_data:
+                text = chapter_data[verse_str]
+                verses_data.append({"num": verse_str, "text": text})
+                print(f"  Verse {verse_num}: {text[:50]}...")
+            else:
+                print(f"  Warning: Verse {verse_num} not found")
         
-        for i, verse_num in enumerate(verse_nums):
-            num = verse_num.get_text(strip=True)
-            
-            # Find the parent span.text
-            parent = verse_num.find_parent('span', class_='text')
-            if not parent:
-                parent = verse_num.parent
-            
-            # Get the verse class (e.g., 'Luke-3-4') to find continuation spans
-            verse_class = None
-            for cls in parent.get('class', []):
-                if '-' in cls and any(char.isdigit() for char in cls):
-                    verse_class = cls
-                    break
-            
-            # Clone the parent to avoid modifying the original DOM
-            parent_copy = copy.copy(parent)
-            
-            # Remove all sup tags (verse numbers, footnotes)
-            for sup in parent_copy.find_all('sup'):
-                sup.decompose()
-            
-            # Get text from cleaned parent
-            verse_parts = [parent_copy.get_text(separator=' ', strip=True)]
-            
-            # Get the verse class (e.g., 'Luke-3-4') to identify continuation spans
-            verse_class = None
-            for cls in parent.get('class', []):
-                if '-' in cls and any(char.isdigit() for char in cls):
-                    verse_class = cls
-                    break
-            
-            # Find all continuation spans (both siblings and other spans with same verse class)
-            # We'll look for all spans with the same verse class that come after this one
-            if verse_class:
-                all_text_spans = passage_container.find_all('span', class_='text')
-                found_current = False
-                next_verse_num = verse_nums[i+1] if i+1 < len(verse_nums) else None
-                
-                for span in all_text_spans:
-                    if span == parent:
-                        found_current = True
-                        continue
-                    
-                    if not found_current:
-                        continue
-                    
-                    # Stop if we hit a span with the next verse number
-                    if next_verse_num and next_verse_num in span.descendants:
-                        break
-                    
-                    # Check if this span has the same verse class and no verse number
-                    span_classes = span.get('class', [])
-                    if verse_class in span_classes and not span.find('sup', class_='versenum'):
-                        # This is a continuation span
-                        span_copy = copy.copy(span)
-                        for sup in span_copy.find_all('sup'):
-                            sup.decompose()
-                        span_text = span_copy.get_text(separator=' ', strip=True)
-                        if span_text:
-                            verse_parts.append(span_text)
-            
-            # Combine all parts
-            text = ' '.join(verse_parts)
-            # Clean up footnote markers
-            text = re.sub(r'\[[a-zA-Z]\]', '', text)
-            # Normalize whitespace
-            text = re.sub(r'\s+', ' ', text)
-            text = text.strip()
-            
-            if text:
-                verses_data.append({"num": num, "text": text})
-                print(f"  Verse {num}: {text[:50]}...")
-
         if verses_data:
-            print(f"\n✓ Successfully extracted {len(verses_data)} verse segments")
+            print(f"✓ Successfully extracted {len(verses_data)} verses")
             return verses_data
-        
-        # Method B: Fallback - get all text from container
-        print("\n--- Strategy 3: Fallback to full text extraction ---")
-        # Remove unwanted elements
-        for unwanted in passage_container.find_all(['h1', 'h2', 'h3', 'h4', 'div'], 
-                                                   class_=['passage-display', 'publisher-info']):
-            unwanted.decompose()
-        
-        text = passage_container.get_text(separator=' ', strip=True)
-        # Clean up
-        text = re.sub(r'\s+', ' ', text)
-        text = re.sub(r'\[[a-zA-Z]\]', '', text)  # Remove footnote markers
-        
-        print(f"Fallback extracted: {len(text)} chars")
-        print(f"Preview: {text[:200]}...")
-        
-        if len(text) > 100:
-            # Return as single verse-like object
-            return [{"num": "1", "text": text}]
-        
-        # Last resort: dump HTML snippet for manual inspection
-        print("\n--- FAILED: Dumping HTML snippet ---")
-        print(str(soup)[:3000])
-        
-        return ["Error: Could not extract passage text"]
+        else:
+            return [f"Error: No verses found for {reference}"]
         
     except Exception as e:
-        print(f"\nKorean Scraper Error: {e}")
+        print(f"\nKorean JSON Error: {e}")
         import traceback
         traceback.print_exc()
         return [f"Error: {str(e)}"]
-
-
 
 # --- TEXT CHUNKING ---
 def chunk_verses_by_size(verses, max_size=1024):
@@ -496,18 +262,13 @@ def post_to_discord(reference, eng_verses, kor_verses, test_mode=False):
 
     # Create Links
     esv_link = f"https://www.biblegateway.com/passage/?search={quote(reference)}&version=ESV"
-    klb_link = f"https://www.biblegateway.com/passage/?search={quote(reference)}&version=KLB"
+    rnksv_link = f"https://www.biblegateway.com/passage/?search={quote(reference)}&version=RNKSV"
 
     # Build fields
     fields = [
         {
-            "name": "🇺🇸 Click here to read in ESV",
-            "value": f"[Link]({esv_link})",
-            "inline": False
-        },
-        {
-            "name": "🇰🇷 현대인의성경 (KLB) 보기",
-            "value": f"[Link]({klb_link})",
+            "name": "📝 Click here to read and write devotional notes",
+            "value": "[Link](https://daily-bible-9716f.web.app/)",
             "inline": False
         }
     ]
@@ -525,7 +286,7 @@ def post_to_discord(reference, eng_verses, kor_verses, test_mode=False):
     for i, chunk in enumerate(kor_chunks):
         suffix = f" (Part {i+1})" if len(kor_chunks) > 1 else ""
         fields.append({
-            "name": f"Korean (KLB){suffix}",
+            "name": f"Korean (RNKSV){suffix}",
             "value": chunk,
             "inline": False
         })
@@ -547,7 +308,6 @@ def post_to_discord(reference, eng_verses, kor_verses, test_mode=False):
         print(f"\n{'='*60}")
         print(f"TEST MODE - Not posting to Discord")
         print(f"{'='*60}")
-        import json
         print(json.dumps(payload, indent=2, ensure_ascii=False))
         print(f"\n{'='*60}")
         print(f"English chunks preview:")
@@ -585,7 +345,6 @@ def post_to_discord(reference, eng_verses, kor_verses, test_mode=False):
         print(f"❌ Discord webhook failed with status {response.status_code}")
         print(f"Response: {response.text}")
         # Also print the payload for debugging
-        import json
         print(f"\n=== PAYLOAD DEBUG ===")
         print(json.dumps(payload, indent=2, ensure_ascii=False))
 
@@ -603,6 +362,5 @@ def main(test_mode=False):
         print("No reading scheduled for today.")
 
 if __name__ == "__main__":
-    import sys
     test_mode = "--test" in sys.argv
     main(test_mode=test_mode)
