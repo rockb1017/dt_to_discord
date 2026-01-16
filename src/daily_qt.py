@@ -268,7 +268,7 @@ def post_to_discord(reference, eng_verses, kor_verses, test_mode=False):
     fields = [
         {
             "name": "📝 Click here to read and write devotional notes",
-            "value": "[Link](https://daily-bible-9716f.web.app/)",
+            "value": "[Link](https://youthdt.bridgeway.online/)",
             "inline": False
         }
     ]
