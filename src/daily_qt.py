@@ -263,30 +263,38 @@ def post_to_discord(reference, eng_verses, kor_verses, test_mode=False):
     # Create Links
     esv_link = f"https://www.biblegateway.com/passage/?search={quote(reference)}&version=ESV"
     rnksv_link = f"https://www.biblegateway.com/passage/?search={quote(reference)}&version=RNKSV"
+    today_date = datetime.now().strftime("%Y-%m-%d")
+    notes_link = f"https://youthdt.bridgeway.online/?date={today_date}"
 
     # Build fields
     fields = [
         {
             "name": "📝 Click here to read and write devotional notes",
-            "value": "[Link](https://youthdt.bridgeway.online/)",
+            "value": f"[Link]({notes_link})",
             "inline": False
         }
     ]
     
     # Add English chunks
     for i, chunk in enumerate(eng_chunks):
-        suffix = f" (Part {i+1})" if len(eng_chunks) > 1 else ""
+        if i == 0:
+            name = "English (ESV)"
+        else:
+            name = "\u200b"  # Zero-width space for blank header
         fields.append({
-            "name": f"English (ESV){suffix}",
+            "name": name,
             "value": chunk,
             "inline": False
         })
     
     # Add Korean chunks
     for i, chunk in enumerate(kor_chunks):
-        suffix = f" (Part {i+1})" if len(kor_chunks) > 1 else ""
+        if i == 0:
+            name = "Korean (새번역)"
+        else:
+            name = "\u200b"  # Zero-width space for blank header
         fields.append({
-            "name": f"Korean (RNKSV){suffix}",
+            "name": name,
             "value": chunk,
             "inline": False
         })
