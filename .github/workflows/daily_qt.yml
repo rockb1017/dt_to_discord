@@ -37,8 +37,14 @@ jobs:
         run: |
           echo "$GCP_CREDS" | base64 -d > src/service_account.json
 
-      # 5. Run the Script
+      # 5. Run the Script with automatic retry on failure
       - name: Run Daily QT Script
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: python src/daily_qt.py
         env:
           # If you hardcoded the URL in the script, remove this env var.
           # If you updated the script to use os.getenv('DISCORD_WEBHOOK_URL'), keep this.
@@ -47,7 +53,6 @@ jobs:
           DISCORD_FORUM_CHANNEL_ID: ${{ secrets.DISCORD_FORUM_CHANNEL_ID }}
           DISCORD_SERVER_ID: ${{ secrets.DISCORD_SERVER_ID }}
           # DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL_TEST }}
-        run: python src/daily_qt.py
 
       # 6. Cleanup (Optional but good practice)
       - name: Remove Service Account JSON
