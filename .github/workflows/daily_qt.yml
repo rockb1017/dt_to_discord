@@ -16,11 +16,11 @@ jobs:
     steps:
       # 1. Check out the repository code
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       # 2. Set up Python
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.9'
 
@@ -39,7 +39,7 @@ jobs:
 
       # 5. Run the Script with automatic retry on failure
       - name: Run Daily QT Script
-        uses: nick-fields/retry@v3
+        uses: nick-fields/retry@v4
         with:
           timeout_minutes: 10
           max_attempts: 3
