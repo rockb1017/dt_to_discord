@@ -2,9 +2,9 @@ name: Daily QT Bot
 
 on:
   schedule:
-    # Runs at 03:00 UTC (7:00 PM PST)
+    # Runs at 01:00 UTC (6:00 PM PST)
     # You can change this using https://crontab.guru/
-    - cron: '0 2 * * *'
+    - cron: '0 1 * * *'
   
   # Allows you to run this manually from the Actions tab for testing
   workflow_dispatch:
